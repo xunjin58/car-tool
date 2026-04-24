@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>汽车报价提取工具</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:       #2563EB;
+    --blue-dark:  #1D4ED8;
+    --blue-light: #EFF6FF;
+    --blue-ring:  rgba(37,99,235,0.12);
+    --green:      #16A34A;
+    --green-dark: #15803D;
+    --bg:         #F1F5F9;
+    --surface:    #FFFFFF;
+    --border:     #E2E8F0;
+    --text:       #0F172A;
+    --muted:      #64748B;
+    --subtle:     #94A3B8;
+    --red:        #DC2626;
+    --red-bg:     #FEF2F2;
+    --row-alt:    #F8FAFC;
+    --row-hover:  #EFF6FF;
+    --sh-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    --r: 12px; --rs: 8px;
+  }
+
+  html, body { height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* ── Header ─────────────────────────────── */
+  .hd {
+    height: 58px;
+    background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 55%, #3B82F6 100%);
+    display: flex; align-items: center; padding: 0 24px; gap: 14px;
+    position: relative; overflow: hidden;
+    box-shadow: 0 2px 10px rgba(30,58,138,0.35);
+  }
+  .hd::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.045) 0, rgba(255,255,255,0.045) 1px, transparent 1px, transparent 48px),
+      repeating-linear-gradient(0deg,  rgba(255,255,255,0.045) 0, rgba(255,255,255,0.045) 1px, transparent 1px, transparent 48px);
+  }
+  .hd-logo {
+    width: 34px; height: 34px; flex-shrink: 0; position: relative; z-index: 1;
+    background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  }
+  .hd-text { position: relative; z-index: 1; }
+  .hd-title { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: -0.3px; }
+  .hd-sub   { font-size: 11.5px; color: rgba(255,255,255,0.68); margin-top: 1px; }
+  .hd-tag {
+    margin-left: auto; position: relative; z-index: 1;
+    background: rgba(255,255,255,0.13); border: 1px solid rgba(255,255,255,0.22);
+    color: rgba(255,255,255,0.88); font-size: 11px; padding: 3px 10px;
+    border-radius: 20px; letter-spacing: 0.3px; white-space: nowrap;
+  }
+
+  /* ── Layout ──────────────────────────────── */
+  .main { height: calc(100vh - 58px); display: flex; overflow: hidden; }
+
+  .pane { display: flex; flex-direction: column; overflow: hidden; }
+  .pane-l { width: 38%; min-width: 320px; border-right: 1px solid var(--border);
+             background: var(--bg); padding: 16px; gap: 14px; overflow-y: auto; }
+  .pane-r { flex: 1; background: var(--bg); }
+
+  /* ── Cards ───────────────────────────────── */
+  .card { background: var(--surface); border-radius: var(--r);
+          box-shadow: var(--sh-sm); border: 1px solid var(--border); overflow: hidden; }
+  .card-h {
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .card-b { padding: 14px 16px; }
+
+  /* ── Form ────────────────────────────────── */
+  .lbl {
+    display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.45px; text-transform: uppercase; margin-bottom: 5px;
+  }
+  input[type=password], textarea {
+    width: 100%; border: 1.5px solid var(--border); border-radius: var(--rs);
+    padding: 9px 12px; font-family: inherit; font-size: 13.5px; color: var(--text);
+    background: #FAFAFA; outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
+    resize: none;
+  }
+  input[type=password]:focus, textarea:focus {
+    border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px var(--blue-ring);
+  }
+  input[type=password]::placeholder, textarea::placeholder { color: var(--subtle); }
+  textarea { height: 420px; line-height: 1.65; font-size: 13px; }
+
+  /* ── Buttons ─────────────────────────────── */
+  .row { display: flex; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 18px; border: none; border-radius: var(--rs);
+    font-family: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: all .15s; letter-spacing: 0.1px; white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.965); }
+  .btn:disabled { opacity: .6; cursor: not-allowed; transform: none !important; }
+
+  .btn-primary {
+    background: var(--blue); color: #fff; flex: 1;
+    box-shadow: 0 2px 6px rgba(37,99,235,.28);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--blue-dark); box-shadow: 0 4px 12px rgba(37,99,235,.32);
+  }
+  .btn-ghost {
+    background: var(--bg); color: var(--muted); border: 1.5px solid var(--border);
+  }
+  .btn-ghost:hover { background: var(--border); color: var(--text); }
+
+  .btn-green {
+    background: var(--green); color: #fff;
+    box-shadow: 0 2px 6px rgba(22,163,74,.28);
+  }
+  .btn-green:hover:not(:disabled) {
+    background: var(--green-dark); box-shadow: 0 4px 12px rgba(22,163,74,.32);
+  }
+
+  /* ── Spinner ─────────────────────────────── */
+  .spin {
+    width: 14px; height: 14px; border: 2.5px solid rgba(255,255,255,.35);
+    border-top-color: #fff; border-radius: 50%; animation: rot .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+
+  /* ── Status bar ──────────────────────────── */
+  .status {
+    border-radius: var(--rs); padding: 9px 13px; font-size: 13px;
+    display: none; align-items: flex-start; gap: 8px; line-height: 1.5;
+  }
+  .status.on { display: flex; }
+  .status-info    { background: var(--blue-light); color: #1D4ED8; border: 1px solid #BFDBFE; }
+  .status-error   { background: var(--red-bg);     color: var(--red);   border: 1px solid #FECACA; }
+  .status-success { background: #F0FDF4;            color: var(--green); border: 1px solid #BBF7D0; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+         flex-shrink: 0; margin-top: 4px; }
+
+  /* ── Tip text ────────────────────────────── */
+  .tip { font-size: 11.5px; color: var(--subtle); line-height: 1.55; }
+
+  /* ── Right panel full-height card ───────── */
+  .r-card {
+    height: 100%; background: var(--surface); border-left: none;
+    display: flex; flex-direction: column; overflow: hidden;
+    border-radius: 0; border: none; border-top: none;
+  }
+  .r-header {
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    background: var(--surface);
+  }
+  .r-title { font-size: 13px; font-weight: 700; color: var(--text); }
+  .badge {
+    background: var(--blue-light); color: var(--blue); font-size: 11px; font-weight: 700;
+    padding: 2px 9px; border-radius: 20px; border: 1px solid #BFDBFE;
+    min-width: 34px; text-align: center;
+  }
+  .r-actions { margin-left: auto; display: flex; gap: 8px; }
+
+  /* ── Table ───────────────────────────────── */
+  .tbl-wrap { flex: 1; overflow: auto; min-height: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #F8FAFC; padding: 9px 12px; text-align: left;
+    font-size: 10.5px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.45px; text-transform: uppercase;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap; position: sticky; top: 0; z-index: 2;
+  }
+  thead th:first-child { padding-left: 16px; }
+  thead th:last-child  { padding-right: 16px; }
+
+  tbody td {
+    padding: 8px 12px; border-bottom: 1px solid #F1F5F9;
+    color: var(--text); vertical-align: middle;
+    min-width: 68px; max-width: 160px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  tbody td:first-child { padding-left: 16px; }
+  tbody td:last-child  { padding-right: 16px; min-width: 120px; max-width: 220px; }
+
+  tbody td[contenteditable] { outline: none; cursor: text; }
+  tbody td[contenteditable]:focus {
+    background: var(--blue-light) !important;
+    box-shadow: inset 0 0 0 2px var(--blue); border-radius: 4px;
+    white-space: normal; overflow: visible; min-width: 100px;
+  }
+
+  tbody tr:nth-child(even)  { background: var(--row-alt); }
+  tbody tr:hover            { background: var(--row-hover); }
+  tbody tr { transition: background .1s; animation: fadeR .22s ease both; }
+  @keyframes fadeR { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+
+  .n-col { color: var(--subtle); font-size: 11px; width: 32px; min-width: 32px !important;
+           max-width: 32px !important; text-align: center; padding: 0 !important;
+           pointer-events: none; user-select: none; }
+  .price { font-weight: 600; color: #B91C1C; font-variant-numeric: tabular-nums; }
+
+  /* ── Empty state ─────────────────────────── */
+  .empty {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 20px; color: var(--subtle); text-align: center;
+  }
+  .empty-box {
+    width: 68px; height: 68px; background: #F8FAFC;
+    border-radius: 18px; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 14px;
+  }
+  .empty-t  { font-size: 13.5px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+  .empty-d  { font-size: 12.5px; color: var(--subtle); line-height: 1.65; }
+
+  /* ── Scrollbar ───────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="hd">
+  <div class="hd-logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1" y="3" width="15" height="13" rx="2"/>
+      <path d="M16 8h4l3 6v3h-7V8z"/>
+      <circle cx="5.5" cy="18.5" r="2.5"/>
+      <circle cx="18.5" cy="18.5" r="2.5"/>
+    </svg>
+  </div>
+  <div class="hd-text">
+    <div class="hd-title">汽车报价信息提取工具</div>
+    <div class="hd-sub">行业群聊消息一键提炼 → Excel</div>
+  </div>
+  <div class="hd-tag">AI 智能解析</div>
+</header>
+
+<!-- ── Main ── -->
+<div class="main">
+
+  <!-- Left pane -->
+  <div class="pane pane-l">
+
+    <!-- Text input -->
+    <div class="card" style="flex:1">
+      <div class="card-h">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="card-title">粘贴群聊消息</span>
+      </div>
+      <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+        <textarea id="rawText" placeholder="请将微信群聊消息直接粘贴到此处，支持多人消息混合格式，可同时粘贴多条…"></textarea>
+
+        <div class="row">
+          <button class="btn btn-primary" id="parseBtn" onclick="doParseText()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            开始解析
+          </button>
+          <button class="btn btn-ghost" onclick="clearAll()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
+            清空
+          </button>
+        </div>
+
+        <!-- Status -->
+        <div class="status status-info" id="statusEl">
+          <div class="dot"></div>
+          <span id="statusMsg">正在调用 AI 解析，请稍候…</span>
+        </div>
+
+        <div class="tip" style="padding-top:10px;border-top:1px solid var(--border)">
+          💡 支持任意格式混贴，AI 自动识别每条报价。解析后单元格可点击手动修正。
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right pane -->
+  <div class="pane pane-r">
+    <div class="r-card">
+
+      <div class="r-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>
+        </svg>
+        <span class="r-title">解析结果</span>
+        <div class="badge" id="countBadge">0 条</div>
+        <div class="r-actions">
+          <button class="btn btn-green" id="exportBtn" onclick="doExport()" disabled>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            导出 Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="tbl-wrap" id="tblWrap" style="display:none">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:32px;text-align:center">#</th>
+              <th>品牌</th>
+              <th>车型</th>
+              <th>配置版本</th>
+              <th>颜色</th>
+              <th>价格</th>
+              <th>数量</th>
+              <th>地区</th>
+              <th>联系方式</th>
+              <th>备注</th>
+            </tr>
+          </thead>
+          <tbody id="tblBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty" id="emptyState">
+        <div class="empty-box">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="3" width="15" height="13" rx="2"/>
+            <path d="M16 8h4l3 6v3h-7V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+          </svg>
+        </div>
+        <div class="empty-t">暂无数据</div>
+        <div class="empty-d">在左侧粘贴群聊消息<br>点击「开始解析」即可提取报价信息</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+const FIELDS = ["品牌","车型","配置版本","颜色","价格","数量","地区","联系方式","备注"];
+
+// ── Status ──
+function setStatus(type, msg) {
+  const el = document.getElementById('statusEl');
+  el.className = `status status-${type} on`;
+  document.getElementById('statusMsg').textContent = msg;
+}
+function clearStatus() {
+  document.getElementById('statusEl').className = 'status status-info';
+}
+
+// ── Parse ──
+async function doParseText() {
+  const text = document.getElementById('rawText').value.trim();
+  if (!text) { setStatus('error', '请先粘贴群聊消息内容'); return; }
+
+  const btn = document.getElementById('parseBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> 解析中…`;
+  setStatus('info', '正在调用 AI 解析，请稍候…');
+
+  try {
+    const res  = await fetch('/api/parse', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({text}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `请求失败 (${res.status})`);
+    renderTable(data.records || []);
+    setStatus('success', `解析完成！共提取 ${(data.records||[]).length} 条报价，单元格可点击手动修正。`);
+  } catch (e) {
+    setStatus('error', `解析失败：${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> 开始解析`;
+  }
+}
+
+// ── Render ──
+function renderTable(records) {
+  const wrap  = document.getElementById('tblWrap');
+  const empty = document.getElementById('emptyState');
+  const badge = document.getElementById('countBadge');
+  const expBtn= document.getElementById('exportBtn');
+  const tbody = document.getElementById('tblBody');
+
+  badge.textContent = `${records.length} 条`;
+
+  if (!records.length) {
+    wrap.style.display  = 'none';
+    empty.style.display = 'flex';
+    expBtn.disabled = true;
+    return;
+  }
+  wrap.style.display  = 'block';
+  empty.style.display = 'none';
+  expBtn.disabled = false;
+
+  tbody.innerHTML = '';
+  records.forEach((rec, i) => {
+    const tr = document.createElement('tr');
+    tr.style.animationDelay = `${i * 0.025}s`;
+
+    const num = document.createElement('td');
+    num.className = 'n-col'; num.textContent = i + 1;
+    tr.appendChild(num);
+
+    FIELDS.forEach(f => {
+      const td = document.createElement('td');
+      td.contentEditable = 'true';
+      td.textContent = rec[f] || '';
+      if (f === '价格') td.className = 'price';
+      td.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); td.blur(); } });
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Collect table data ──
+function collectData() {
+  return Array.from(document.querySelectorAll('#tblBody tr')).map(tr => {
+    const cells = tr.querySelectorAll('td[contenteditable]');
+    const obj = {};
+    FIELDS.forEach((f, i) => { obj[f] = cells[i]?.textContent.trim() || ''; });
+    return obj;
+  });
+}
+
+// ── Export ──
+async function doExport() {
+  const records = collectData();
+  if (!records.length) return;
+
+  const btn = document.getElementById('exportBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> 生成中…`;
+
+  try {
+    const res = await fetch('/api/export', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({records}),
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || '导出失败'); }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `汽车报价_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus('success', 'Excel 文件已生成并下载成功！');
+  } catch (e) {
+    setStatus('error', `导出失败：${e.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 导出 Excel`;
+    document.getElementById('exportBtn').disabled = false;
+  }
+}
+
+// ── Clear ──
+function clearAll() {
+  document.getElementById('rawText').value = '';
+  renderTable([]);
+  clearStatus();
+}
+</script>
+</body>
+</html>
